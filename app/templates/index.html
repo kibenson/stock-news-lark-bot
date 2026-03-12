@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 股票新闻 Lark Bot 管理台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: { 50:'#eff6ff',100:'#dbeafe',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',900:'#1e3a8a' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .tab-active { @apply border-b-2 border-blue-500 text-blue-600 dark:text-blue-400; }
+    .card { @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700; }
+    .btn-primary { @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
+    .btn-danger { @apply bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs transition-colors; }
+    .btn-success { @apply bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
+    .badge-positive { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300; }
+    .badge-negative { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300; }
+    .badge-neutral { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400; }
+    .input { @apply w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none; }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { transition: all 0.3s ease; }
+    .sidebar-item { @apply flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors; }
+    .sidebar-active { @apply bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium; }
+  </style>
+</head>
+<body class="h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+
+<!-- Toast 通知 -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<!-- 主布局 -->
+<div class="flex h-screen overflow-hidden">
+
+  <!-- 侧边栏 -->
+  <aside class="w-64 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+    <!-- Logo -->
+    <div class="p-5 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">📊</span>
+        <div>
+          <h1 class="font-bold text-gray-900 dark:text-white text-sm leading-tight">股票新闻 Bot</h1>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Lark 智能推送管理台</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导航菜单 -->
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+      <div onclick="showTab('dashboard')" class="sidebar-item sidebar-active" id="nav-dashboard">
+        <span>📊</span><span class="text-sm">仪表盘</span>
+      </div>
+      <div onclick="showTab('stocks')" class="sidebar-item" id="nav-stocks">
+        <span>📈</span><span class="text-sm">股票关注</span>
+      </div>
+      <div onclick="showTab('users')" class="sidebar-item" id="nav-users">
+        <span>👤</span><span class="text-sm">用户监控</span>
+      </div>
+      <div onclick="showTab('keywords')" class="sidebar-item" id="nav-keywords">
+        <span>🔑</span><span class="text-sm">关键词管理</span>
+      </div>
+      <div onclick="showTab('news')" class="sidebar-item" id="nav-news">
+        <span>📰</span><span class="text-sm">新闻中心</span>
+      </div>
+      <div onclick="showTab('sentiment')" class="sidebar-item" id="nav-sentiment">
+        <span>💬</span><span class="text-sm">情感分析</span>
+      </div>
+      <div onclick="showTab('push')" class="sidebar-item" id="nav-push">
+        <span>📤</span><span class="text-sm">推送历史</span>
+      </div>
+      <div onclick="showTab('ai')" class="sidebar-item" id="nav-ai">
+        <span>🤖</span><span class="text-sm">AI 分析</span>
+      </div>
+    </nav>
+
+    <!-- 底部操作 -->
+    <div class="p-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+      <button onclick="triggerPush()" class="btn-primary w-full text-center flex items-center justify-center gap-2">
+        <span>📤</span> 立即推送
+      </button>
+      <button onclick="toggleTheme()" class="w-full px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <span id="theme-icon">🌙</span> 切换主题
+      </button>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="flex-1 overflow-y-auto">
+    <!-- 顶部栏 -->
+    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <h2 id="page-title" class="text-lg font-semibold text-gray-900 dark:text-white">仪表盘</h2>
+      <div class="flex items-center gap-3">
+        <span id="scheduler-status" class="text-xs text-gray-500 dark:text-gray-400"></span>
+        <button onclick="refreshCurrentTab()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="p-6">
+
+      <!-- ============ 仪表盘 ============ -->
+      <div id="tab-dashboard" class="tab-content">
+        <div id="dashboard-content">
+          <div class="flex items-center justify-center py-12">
+            <svg class="spin w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 股票关注 ============ -->
+      <div id="tab-stocks" class="tab-content hidden">
+        <div class="mb-5 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-700 dark:text-gray-200">关注的股票列表</h3>
+          <button onclick="showAddStockModal()" class="btn-primary">+ 添加股票</button>
+        </div>
+        <div id="stocks-list" class="grid gap-3"></div>
+      </div>
+
+      <!-- ============ 用户监控 ============ -->
+      <div id="tab-users" class="tab-content hidden">
+        <div class="mb-5 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-700 dark:text-gray-200">监控用户列表</h3>
+          <button onclick="showAddUserModal()" class="btn-primary">+ 添加用户</button>
+        </div>
+        <div id="users-list" class="grid gap-3"></div>
+      </div>
+
+      <!-- ============ 关键词管理 ============ -->
+      <div id="tab-keywords" class="tab-content hidden">
+        <div class="mb-5 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-700 dark:text-gray-200">关键词配置</h3>
+          <button onclick="showAddKeywordModal()" class="btn-primary">+ 添加关键词</button>
+        </div>
+        <div id="keywords-list" class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </div>
+
+      <!-- ============ 新闻中心 ============ -->
+      <div id="tab-news" class="tab-content hidden">
+        <div class="mb-5 flex items-center justify-between flex-wrap gap-3">
+          <h3 class="font-semibold text-gray-700 dark:text-gray-200">新闻中心</h3>
+          <div class="flex gap-2 flex-wrap">
+            <select id="news-sentiment-filter" onchange="loadNews()" class="input w-auto text-xs">
+              <option value="">全部情感</option>
+              <option value="positive">正面 🟢</option>
+              <option value="negative">负面 🔴</option>
+              <option value="neutral">中性 ⚪</option>
+            </select>
+            <select id="news-hours-filter" onchange="loadNews()" class="input w-auto text-xs">
+              <option value="24">最近24小时</option>
+              <option value="48">最近48小时</option>
+              <option value="168">最近7天</option>
+            </select>
+            <button onclick="triggerNewsFetch()" class="btn-success text-xs">🔄 抓取新闻</button>
+          </div>
+        </div>
+        <div id="news-list" class="space-y-3"></div>
+        <div class="mt-4 flex justify-center">
+          <button id="news-load-more" onclick="loadMoreNews()" class="hidden px-6 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700">加载更多</button>
+        </div>
+      </div>
+
+      <!-- ============ 情感分析 ============ -->
+      <div id="tab-sentiment" class="tab-content hidden">
+        <div class="mb-5 flex items-center justify-between flex-wrap gap-3">
+          <h3 class="font-semibold text-gray-700 dark:text-gray-200">情感分析报告</h3>
+          <div class="flex gap-2">
+            <button onclick="runSentimentAnalysis(false)" class="btn-primary text-xs">🔍 本地分析</button>
+            <button onclick="runSentimentAnalysis(true)" class="btn-primary text-xs">🤖 AI分析</button>
+          </div>
+        </div>
+        <div id="sentiment-content" class="space-y-4"></div>
+      </div>
+
+      <!-- ============ 推送历史 ============ -->
+      <div id="tab-push" class="tab-content hidden">
+        <div class="mb-5 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-700 dark:text-gray-200">推送历史记录</h3>
+          <button onclick="triggerPush()" class="btn-primary">📤 手动推送</button>
+        </div>
+        <div id="push-list" class="space-y-3"></div>
+      </div>
+
+      <!-- ============ AI 分析 ============ -->
+      <div id="tab-ai" class="tab-content hidden">
+        <div class="max-w-2xl">
+          <div class="card p-6">
+            <h3 class="font-semibold mb-4 text-gray-700 dark:text-gray-200">🤖 AI 内容分析</h3>
+            <div id="ai-status-banner" class="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300 text-sm hidden">
+              ⚠️ AI 服务未配置，请在 .env 文件中设置 DASHSCOPE_API_KEY
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">分析类型</label>
+                <select id="ai-type" class="input">
+                  <option value="sentiment">情感分析</option>
+                  <option value="summary">内容摘要</option>
+                  <option value="advice">投资建议（含免责声明）</option>
+                  <option value="custom">自定义Prompt</option>
+                </select>
+              </div>
+              <div id="custom-prompt-div" class="hidden">
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">自定义提示词</label>
+                <textarea id="ai-custom-prompt" class="input" rows="2" placeholder="请输入你的分析提示词..."></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">分析内容</label>
+                <textarea id="ai-content" class="input" rows="6" placeholder="请输入要分析的文本内容..."></textarea>
+              </div>
+              <button onclick="runAIAnalysis()" class="btn-primary w-full">🚀 开始分析</button>
+            </div>
+          </div>
+          <div id="ai-result" class="mt-4 card p-6 hidden">
+            <h4 class="font-medium mb-3 text-gray-700 dark:text-gray-200">分析结果</h4>
+            <div id="ai-result-content"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============ 模态框 ============ -->
+
+<!-- 添加股票 -->
+<div id="modal-stock" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="font-semibold text-lg mb-4">添加关注股票</h3>
+    <div class="space-y-3">
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">股票代码 *</label>
+        <input id="stock-symbol" type="text" class="input mt-1" placeholder="如: AAPL, 600519"></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">股票名称 *</label>
+        <input id="stock-name" type="text" class="input mt-1" placeholder="如: 苹果公司, 贵州茅台"></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">市场</label>
+        <select id="stock-market" class="input mt-1">
+          <option value="US">美股 (US)</option>
+          <option value="CN">A股 (CN)</option>
+          <option value="HK">港股 (HK)</option>
+          <option value="OTHER">其他</option>
+        </select></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">备注</label>
+        <input id="stock-notes" type="text" class="input mt-1" placeholder="可选备注"></div>
+    </div>
+    <div class="mt-5 flex gap-3 justify-end">
+      <button onclick="closeModal('modal-stock')" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">取消</button>
+      <button onclick="submitAddStock()" class="btn-primary">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加用户 -->
+<div id="modal-user" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="font-semibold text-lg mb-4">添加监控用户</h3>
+    <div class="space-y-3">
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">平台 *</label>
+        <select id="user-platform" class="input mt-1">
+          <option value="twitter">Twitter/X</option>
+          <option value="xueqiu">雪球</option>
+          <option value="weibo">微博</option>
+          <option value="other">其他</option>
+        </select></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">用户名 *</label>
+        <input id="user-username" type="text" class="input mt-1" placeholder="用户名/账号ID"></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">显示名称</label>
+        <input id="user-displayname" type="text" class="input mt-1" placeholder="可选，显示名称"></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">备注</label>
+        <input id="user-notes" type="text" class="input mt-1" placeholder="可选备注"></div>
+    </div>
+    <div class="mt-5 flex gap-3 justify-end">
+      <button onclick="closeModal('modal-user')" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">取消</button>
+      <button onclick="submitAddUser()" class="btn-primary">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加关键词 -->
+<div id="modal-keyword" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="font-semibold text-lg mb-4">添加关键词</h3>
+    <div class="space-y-3">
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">关键词 *</label>
+        <input id="keyword-text" type="text" class="input mt-1" placeholder="如: 美联储, 人工智能, 纳斯达克"></div>
+      <div><label class="text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
+        <input id="keyword-category" type="text" class="input mt-1" placeholder="如: 宏观, 行业, 个股"></div>
+    </div>
+    <div class="mt-5 flex gap-3 justify-end">
+      <button onclick="closeModal('modal-keyword')" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">取消</button>
+      <button onclick="submitAddKeyword()" class="btn-primary">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ 状态管理 ============
+let currentTab = 'dashboard';
+let newsPage = 1;
+const BASE_URL = '';
+
+// ============ 主题管理 ============
+function toggleTheme() {
+  document.documentElement.classList.toggle('dark');
+  const isDark = document.documentElement.classList.contains('dark');
+  document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}
+
+// 初始化主题
+if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  document.documentElement.classList.add('dark');
+  document.getElementById('theme-icon').textContent = '☀️';
+}
+
+// ============ Toast 通知 ============
+function showToast(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500',
+    warning: 'bg-yellow-500'
+  };
+  const toast = document.createElement('div');
+  toast.className = `toast ${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow-lg text-sm max-w-xs`;
+  toast.textContent = message;
+  document.getElementById('toast-container').appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+// ============ API 请求封装 ============
+async function api(url, options = {}) {
+  try {
+    const resp = await fetch(BASE_URL + url, {
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      ...options,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || '请求失败');
+    }
+    return await resp.json();
+  } catch (e) {
+    throw e;
+  }
+}
+
+// ============ Tab 切换 ============
+const TAB_TITLES = {
+  dashboard: '仪表盘',
+  stocks: '股票关注列表',
+  users: '用户监控',
+  keywords: '关键词管理',
+  news: '新闻中心',
+  sentiment: '情感分析',
+  push: '推送历史',
+  ai: 'AI 分析',
+};
+
+function showTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById(`tab-${tab}`).classList.remove('hidden');
+
+  document.querySelectorAll('[id^="nav-"]').forEach(el => el.classList.remove('sidebar-active'));
+  document.getElementById(`nav-${tab}`).classList.add('sidebar-active');
+
+  document.getElementById('page-title').textContent = TAB_TITLES[tab] || tab;
+  currentTab = tab;
+  loadTabData(tab);
+}
+
+function refreshCurrentTab() { loadTabData(currentTab); }
+
+function loadTabData(tab) {
+  switch(tab) {
+    case 'dashboard': loadDashboard(); break;
+    case 'stocks': loadStocks(); break;
+    case 'users': loadUsers(); break;
+    case 'keywords': loadKeywords(); break;
+    case 'news': newsPage = 1; loadNews(); break;
+    case 'sentiment': loadSentiment(); break;
+    case 'push': loadPushHistory(); break;
+    case 'ai': checkAIStatus(); break;
+  }
+}
+
+// ============ 仪表盘 ============
+async function loadDashboard() {
+  const el = document.getElementById('dashboard-content');
+  el.innerHTML = `<div class="flex items-center justify-center py-12"><svg class="spin w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></div>`;
+  try {
+    const data = await api('/api/dashboard');
+    const scoreColor = (data.latest_sentiment?.overall_score || 0) > 0.1 ? 'text-green-500' : ((data.latest_sentiment?.overall_score || 0) < -0.1 ? 'text-red-500' : 'text-gray-500');
+    const scoreArrow = (data.latest_sentiment?.overall_score || 0) > 0.1 ? '📈' : ((data.latest_sentiment?.overall_score || 0) < -0.1 ? '📉' : '➡️');
+
+    el.innerHTML = `
+      <!-- 统计卡片 -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        ${[
+          { icon: '📈', label: '关注股票', value: data.total_stocks, color: 'blue' },
+          { icon: '👤', label: '监控用户', value: data.total_users, color: 'purple' },
+          { icon: '🔑', label: '关键词', value: data.total_keywords, color: 'orange' },
+          { icon: '📰', label: '新闻总量', value: data.total_news, color: 'green' },
+        ].map(s => `
+          <div class="card p-5">
+            <div class="flex items-center justify-between">
+              <span class="text-2xl">${s.icon}</span>
+              <span class="text-2xl font-bold text-${s.color}-600">${s.value}</span>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">${s.label}</p>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- 两列 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- 情感概览 -->
+        <div class="card p-5">
+          <h3 class="font-semibold mb-4 flex items-center gap-2">💬 最新情感分析</h3>
+          ${data.latest_sentiment ? `
+            <div class="text-center py-2">
+              <div class="text-4xl font-bold ${scoreColor}">${scoreArrow} ${(data.latest_sentiment.overall_score || 0) > 0 ? '+' : ''}${(data.latest_sentiment.overall_score || 0).toFixed(2)}</div>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">情感指数</p>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div class="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div class="text-lg font-bold text-green-600">${data.latest_sentiment.positive_count}</div>
+                <div class="text-xs text-gray-500">正面 🟢</div>
+              </div>
+              <div class="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <div class="text-lg font-bold text-red-600">${data.latest_sentiment.negative_count}</div>
+                <div class="text-xs text-gray-500">负面 🔴</div>
+              </div>
+              <div class="p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-lg font-bold text-gray-600 dark:text-gray-300">${data.latest_sentiment.neutral_count}</div>
+                <div class="text-xs text-gray-500">中性 ⚪</div>
+              </div>
+            </div>
+            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">${data.latest_sentiment.conclusion || ''}</p>
+          ` : `<div class="text-center text-gray-400 py-8 text-sm">暂无情感分析数据<br><button onclick="runSentimentAnalysis(false);showTab('sentiment')" class="mt-2 text-blue-500 hover:underline">立即分析</button></div>`}
+        </div>
+
+        <!-- 最近新闻 -->
+        <div class="card p-5">
+          <h3 class="font-semibold mb-4 flex items-center gap-2">📰 最近新闻</h3>
+          ${data.recent_news.length ? data.recent_news.map(n => `
+            <div class="py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+              <div class="flex items-start gap-2">
+                <span>${n.sentiment_label === 'positive' ? '🟢' : n.sentiment_label === 'negative' ? '🔴' : '⚪'}</span>
+                <div class="flex-1 min-w-0">
+                  ${n.url ? `<a href="${n.url}" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:underline line-clamp-1">${n.title}</a>` : `<p class="text-sm text-gray-700 dark:text-gray-300 line-clamp-1">${n.title}</p>`}
+                  <p class="text-xs text-gray-400 mt-0.5">${n.source || ''}</p>
+                </div>
+              </div>
+            </div>
+          `).join('') : `<div class="text-center text-gray-400 py-8 text-sm">暂无新闻<br><button onclick="triggerNewsFetch();showTab('news')" class="mt-2 text-blue-500 hover:underline">立即抓取</button></div>`}
+        </div>
+      </div>
+
+      <!-- 推送统计 -->
+      <div class="card p-5 mt-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-semibold">📤 推送统计（近7天）</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">成功推送 ${data.recent_push_count} 次，成功率 ${data.push_success_rate}%</p>
+          </div>
+          <button onclick="triggerPush()" class="btn-primary">立即推送</button>
+        </div>
+      </div>
+    `;
+
+    // 更新调度器状态
+    loadSchedulerStatus();
+  } catch(e) {
+    el.innerHTML = `<div class="text-center text-red-500 py-8">加载失败: ${e.message}</div>`;
+  }
+}
+
+async function loadSchedulerStatus() {
+  try {
+    const status = await api('/api/push/status');
+    const el = document.getElementById('scheduler-status');
+    if (status.running && status.next_run_time) {
+      el.textContent = `⏰ 下次推送: ${status.next_run_time}`;
+    } else {
+      el.textContent = '⏰ 调度器未运行';
+    }
+  } catch(e) {}
+}
+
+// ============ 股票管理 ============
+async function loadStocks() {
+  const el = document.getElementById('stocks-list');
+  el.innerHTML = loadingHtml();
+  try {
+    const stocks = await api('/api/stocks');
+    if (!stocks.length) {
+      el.innerHTML = emptyHtml('暂无关注的股票', '点击右上角"添加股票"开始关注');
+      return;
+    }
+    el.innerHTML = stocks.map(s => `
+      <div class="card p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center font-bold text-blue-600 text-sm">${s.symbol.slice(0,3)}</div>
+          <div>
+            <div class="font-semibold text-gray-900 dark:text-white">${s.symbol} <span class="text-xs text-gray-400">${s.market}</span></div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">${s.name}</div>
+            ${s.notes ? `<div class="text-xs text-gray-400">${s.notes}</div>` : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-full text-xs ${s.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500'}">${s.is_active ? '监控中' : '已暂停'}</span>
+          <button onclick="deleteItem('stocks', ${s.id}, '${s.symbol}')" class="btn-danger">删除</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = errorHtml(e.message); }
+}
+
+function showAddStockModal() {
+  ['stock-symbol','stock-name','stock-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('stock-market').value = 'US';
+  document.getElementById('modal-stock').classList.remove('hidden');
+}
+
+async function submitAddStock() {
+  const symbol = document.getElementById('stock-symbol').value.trim();
+  const name = document.getElementById('stock-name').value.trim();
+  if (!symbol || !name) { showToast('股票代码和名称为必填', 'error'); return; }
+  try {
+    await api('/api/stocks', { method: 'POST', body: { symbol, name, market: document.getElementById('stock-market').value, notes: document.getElementById('stock-notes').value.trim() || null } });
+    closeModal('modal-stock');
+    showToast(`✅ 已添加 ${symbol}`, 'success');
+    loadStocks();
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 用户监控 ============
+async function loadUsers() {
+  const el = document.getElementById('users-list');
+  el.innerHTML = loadingHtml();
+  try {
+    const users = await api('/api/users');
+    if (!users.length) { el.innerHTML = emptyHtml('暂无监控用户', '点击右上角"添加用户"开始监控'); return; }
+    el.innerHTML = users.map(u => `
+      <div class="card p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center text-xl">${platformIcon(u.platform)}</div>
+          <div>
+            <div class="font-semibold text-gray-900 dark:text-white">${u.display_name || u.username}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">${u.platform} · @${u.username}</div>
+            ${u.notes ? `<div class="text-xs text-gray-400">${u.notes}</div>` : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-full text-xs ${u.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500'}">${u.is_active ? '监控中' : '已暂停'}</span>
+          <button onclick="deleteItem('users', ${u.id}, '${u.username}')" class="btn-danger">删除</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = errorHtml(e.message); }
+}
+
+function platformIcon(p) {
+  const icons = { twitter: '𝕏', xueqiu: '🐦', weibo: '📱', other: '👤' };
+  return icons[p] || '👤';
+}
+
+function showAddUserModal() {
+  ['user-username','user-displayname','user-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modal-user').classList.remove('hidden');
+}
+
+async function submitAddUser() {
+  const platform = document.getElementById('user-platform').value;
+  const username = document.getElementById('user-username').value.trim();
+  if (!username) { showToast('用户名为必填', 'error'); return; }
+  try {
+    await api('/api/users', { method: 'POST', body: { platform, username, display_name: document.getElementById('user-displayname').value.trim() || null, notes: document.getElementById('user-notes').value.trim() || null } });
+    closeModal('modal-user');
+    showToast(`✅ 已添加 ${platform}/${username}`, 'success');
+    loadUsers();
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 关键词管理 ============
+async function loadKeywords() {
+  const el = document.getElementById('keywords-list');
+  el.innerHTML = loadingHtml();
+  try {
+    const kws = await api('/api/keywords');
+    if (!kws.length) { el.innerHTML = emptyHtml('暂无关键词', '点击右上角"添加关键词"开始配置'); return; }
+    el.innerHTML = kws.map(k => `
+      <div class="card p-4">
+        <div class="flex items-start justify-between">
+          <div>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium text-sm">${k.keyword}</span>
+            ${k.category ? `<span class="ml-2 text-xs text-gray-400">${k.category}</span>` : ''}
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-xs ${k.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500'}">${k.is_active ? '启用' : '禁用'}</span>
+            <button onclick="deleteItem('keywords', ${k.id}, '${k.keyword}')" class="btn-danger">删除</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML = errorHtml(e.message); }
+}
+
+function showAddKeywordModal() {
+  ['keyword-text','keyword-category'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modal-keyword').classList.remove('hidden');
+}
+
+async function submitAddKeyword() {
+  const keyword = document.getElementById('keyword-text').value.trim();
+  if (!keyword) { showToast('关键词为必填', 'error'); return; }
+  try {
+    await api('/api/keywords', { method: 'POST', body: { keyword, category: document.getElementById('keyword-category').value.trim() || null } });
+    closeModal('modal-keyword');
+    showToast(`✅ 已添加关键词: ${keyword}`, 'success');
+    loadKeywords();
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 新闻 ============
+async function loadNews() {
+  newsPage = 1;
+  const el = document.getElementById('news-list');
+  el.innerHTML = loadingHtml();
+  await fetchNews(true);
+}
+
+async function loadMoreNews() {
+  newsPage++;
+  await fetchNews(false);
+}
+
+async function fetchNews(reset) {
+  const sentiment = document.getElementById('news-sentiment-filter').value;
+  const hours = document.getElementById('news-hours-filter').value;
+  const el = document.getElementById('news-list');
+
+  try {
+    let url = `/api/news?page=${newsPage}&page_size=15&hours=${hours}`;
+    if (sentiment) url += `&sentiment=${sentiment}`;
+
+    const articles = await api(url);
+    const html = articles.map(n => {
+      const badge = n.sentiment_label === 'positive' ? '<span class="badge-positive">🟢 正面</span>' :
+                    n.sentiment_label === 'negative' ? '<span class="badge-negative">🔴 负面</span>' :
+                    '<span class="badge-neutral">⚪ 中性</span>';
+      const pubDate = n.published_at ? new Date(n.published_at).toLocaleDateString('zh-CN') : '';
+      return `
+        <div class="card p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              ${n.url ? `<a href="${n.url}" target="_blank" class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">${n.title}</a>` : `<p class="text-sm font-medium text-gray-800 dark:text-gray-200">${n.title}</p>`}
+              ${n.content ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">${n.content}</p>` : ''}
+              <div class="flex items-center gap-3 mt-2">
+                ${badge}
+                <span class="text-xs text-gray-400">${n.source || ''}</span>
+                ${pubDate ? `<span class="text-xs text-gray-400">${pubDate}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    if (reset) {
+      el.innerHTML = html || emptyHtml('暂无新闻', '点击右上角"抓取新闻"获取最新数据');
+    } else {
+      el.insertAdjacentHTML('beforeend', html);
+    }
+
+    document.getElementById('news-load-more').classList.toggle('hidden', articles.length < 15);
+  } catch(e) { if (reset) el.innerHTML = errorHtml(e.message); }
+}
+
+async function triggerNewsFetch() {
+  try {
+    await api('/api/news/fetch');
+    showToast('✅ 新闻抓取任务已启动', 'success');
+    setTimeout(() => loadNews(), 2000);
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 情感分析 ============
+async function loadSentiment() {
+  const el = document.getElementById('sentiment-content');
+  el.innerHTML = loadingHtml();
+  try {
+    const reports = await api('/api/sentiment');
+    if (!reports.length) {
+      el.innerHTML = emptyHtml('暂无情感分析报告', '点击上方按钮开始分析');
+      return;
+    }
+    el.innerHTML = reports.map(r => {
+      const total = r.positive_count + r.negative_count + r.neutral_count;
+      const posW = total > 0 ? (r.positive_count / total * 100).toFixed(0) : 0;
+      const negW = total > 0 ? (r.negative_count / total * 100).toFixed(0) : 0;
+      const neuW = total > 0 ? (r.neutral_count / total * 100).toFixed(0) : 0;
+      const scoreColor = r.overall_score > 0.1 ? 'text-green-500' : (r.overall_score < -0.1 ? 'text-red-500' : 'text-gray-500');
+      return `
+        <div class="card p-5">
+          <div class="flex items-start justify-between">
+            <div>
+              <h4 class="font-semibold text-gray-800 dark:text-gray-200">${r.target_name || r.target_type}</h4>
+              <p class="text-xs text-gray-400 mt-0.5">${new Date(r.created_at).toLocaleString('zh-CN')}</p>
+            </div>
+            <div class="text-right">
+              <div class="text-2xl font-bold ${scoreColor}">${r.overall_score > 0 ? '+' : ''}${(r.overall_score || 0).toFixed(2)}</div>
+              <div class="text-xs text-gray-400">情感指数</div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div class="flex rounded-full overflow-hidden h-2 bg-gray-100 dark:bg-gray-700">
+              <div class="bg-green-500 h-full" style="width:${posW}%"></div>
+              <div class="bg-red-500 h-full" style="width:${negW}%"></div>
+              <div class="bg-gray-300 dark:bg-gray-500 h-full" style="width:${neuW}%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span>🟢 ${r.positive_count}</span>
+              <span>🔴 ${r.negative_count}</span>
+              <span>⚪ ${r.neutral_count}</span>
+            </div>
+          </div>
+          ${r.conclusion ? `<p class="mt-3 text-sm text-gray-600 dark:text-gray-400">${r.conclusion}</p>` : ''}
+        </div>
+      `;
+    }).join('');
+  } catch(e) { el.innerHTML = errorHtml(e.message); }
+}
+
+async function runSentimentAnalysis(useAI) {
+  showToast(useAI ? '🤖 AI情感分析中...' : '🔍 本地分析中...', 'info');
+  try {
+    const result = await api(`/api/sentiment/analyze?use_ai=${useAI}`);
+    showToast(`✅ 分析完成: ${result.conclusion}`, 'success');
+    if (currentTab === 'sentiment') loadSentiment();
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 推送历史 ============
+async function loadPushHistory() {
+  const el = document.getElementById('push-list');
+  el.innerHTML = loadingHtml();
+  try {
+    const history = await api('/api/push/history?page_size=30');
+    if (!history.length) { el.innerHTML = emptyHtml('暂无推送记录', '尚未进行任何推送'); return; }
+    el.innerHTML = history.map(h => {
+      const statusBadge = h.status === 'success' ? '<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">✅ 成功</span>' :
+                          h.status === 'failed' ? '<span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">❌ 失败</span>' :
+                          '<span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">⏳ 处理中</span>';
+      return `
+        <div class="card p-4">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                ${statusBadge}
+                <span class="font-medium text-sm text-gray-800 dark:text-gray-200">${h.title || h.push_type}</span>
+              </div>
+              ${h.content ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${h.content}</p>` : ''}
+              ${h.error_message ? `<p class="text-xs text-red-400 mt-1">错误: ${h.error_message}</p>` : ''}
+            </div>
+            <span class="text-xs text-gray-400 whitespace-nowrap ml-3">${new Date(h.pushed_at).toLocaleString('zh-CN')}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) { el.innerHTML = errorHtml(e.message); }
+}
+
+async function triggerPush() {
+  if (!confirm('确认立即触发推送？将向所有配置的Lark群发送报告。')) return;
+  try {
+    const resp = await api('/api/push/trigger', { method: 'POST', body: { push_type: 'manual', include_sentiment: true } });
+    showToast(`✅ ${resp.message}`, 'success');
+    if (currentTab === 'push') setTimeout(loadPushHistory, 2000);
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ AI 分析 ============
+async function checkAIStatus() {
+  try {
+    const status = await api('/api/ai/status');
+    const banner = document.getElementById('ai-status-banner');
+    if (!status.available) {
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+      banner.textContent = `✅ AI 已就绪: ${status.model} (${status.provider})`;
+    }
+  } catch(e) {}
+}
+
+document.getElementById('ai-type').addEventListener('change', function() {
+  document.getElementById('custom-prompt-div').classList.toggle('hidden', this.value !== 'custom');
+});
+
+async function runAIAnalysis() {
+  const content = document.getElementById('ai-content').value.trim();
+  if (!content) { showToast('请输入要分析的内容', 'error'); return; }
+
+  const type = document.getElementById('ai-type').value;
+  const customPrompt = document.getElementById('ai-custom-prompt').value.trim();
+
+  if (type === 'custom' && !customPrompt) { showToast('请输入自定义提示词', 'error'); return; }
+
+  const resultEl = document.getElementById('ai-result');
+  const resultContent = document.getElementById('ai-result-content');
+  resultEl.classList.add('hidden');
+  showToast('🤖 AI 分析中...', 'info');
+
+  try {
+    const resp = await api('/api/ai/analyze', {
+      method: 'POST',
+      body: { content, analysis_type: type, custom_prompt: customPrompt || null }
+    });
+
+    let html = '';
+    const result = resp.result;
+    if (typeof result === 'object' && result !== null) {
+      const labelColor = result.label === 'positive' ? 'text-green-600' : result.label === 'negative' ? 'text-red-600' : 'text-gray-600';
+      html = `
+        <div class="space-y-2">
+          ${result.label ? `<div class="flex items-center gap-2"><span class="text-sm font-medium">情感倾向:</span><span class="font-bold ${labelColor}">${result.label === 'positive' ? '🟢 正面' : result.label === 'negative' ? '🔴 负面' : '⚪ 中性'}</span></div>` : ''}
+          ${result.score !== undefined ? `<div class="flex items-center gap-2"><span class="text-sm font-medium">置信度:</span><span class="font-bold">${(result.score * 100).toFixed(0)}%</span></div>` : ''}
+          ${result.reason ? `<div class="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300">${result.reason}</div>` : ''}
+        </div>`;
+    } else {
+      html = `<div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">${result}</div>`;
+    }
+
+    resultContent.innerHTML = html;
+    resultEl.classList.remove('hidden');
+    showToast('✅ 分析完成', 'success');
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 通用删除 ============
+async function deleteItem(resource, id, name) {
+  if (!confirm(`确认删除 "${name}"？`)) return;
+  try {
+    await api(`/api/${resource}/${id}`, { method: 'DELETE' });
+    showToast(`✅ 已删除 ${name}`, 'success');
+    loadTabData(currentTab);
+  } catch(e) { showToast(`❌ ${e.message}`, 'error'); }
+}
+
+// ============ 模态框 ============
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+// 点击遮罩关闭
+document.querySelectorAll('[id^="modal-"]').forEach(modal => {
+  modal.addEventListener('click', function(e) {
+    if (e.target === this) closeModal(this.id);
+  });
+});
+
+// ============ 辅助函数 ============
+function loadingHtml() {
+  return `<div class="flex items-center justify-center py-12"><svg class="spin w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></div>`;
+}
+
+function emptyHtml(title, subtitle) {
+  return `<div class="text-center py-12 col-span-full"><div class="text-gray-300 dark:text-gray-600 text-5xl mb-3">📭</div><p class="text-gray-500 dark:text-gray-400 font-medium">${title}</p><p class="text-gray-400 dark:text-gray-500 text-sm mt-1">${subtitle}</p></div>`;
+}
+
+function errorHtml(msg) {
+  return `<div class="text-center py-8 text-red-500"><p>❌ 加载失败</p><p class="text-xs mt-1 text-gray-400">${msg}</p></div>`;
+}
+
+// ============ 初始化 ============
+document.addEventListener('DOMContentLoaded', () => {
+  loadDashboard();
+  loadSchedulerStatus();
+});
+</script>
+</body>
+</html>

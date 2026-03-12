@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock-news-lark-bot
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # 持久化 SQLite 数据库
+      - ./data:/app/data
+    environment:
+      # 数据库（使用持久化路径）
+      - DATABASE_URL=sqlite:////app/data/stock_news.db
+      # Lark 配置
+      - LARK_WEBHOOK_URL=${LARK_WEBHOOK_URL:-}
+      # AI 配置
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-qwen-plus}
+      - AI_BASE_URL=${AI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      # 新闻 API
+      - NEWS_API_KEY=${NEWS_API_KEY:-}
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}
+      # 定时任务
+      - PUSH_SCHEDULE_HOUR=${PUSH_SCHEDULE_HOUR:-8}
+      - PUSH_SCHEDULE_MINUTE=${PUSH_SCHEDULE_MINUTE:-0}
+      - PUSH_TIMEZONE=${PUSH_TIMEZONE:-Asia/Shanghai}
+      # 应用配置
+      - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
